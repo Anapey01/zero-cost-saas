@@ -1,6 +1,7 @@
 # Running a Real SaaS at ~$0/Month: A Decision Log
 
 [![GitHub stars](https://img.shields.io/github/stars/Anapey01/zero-cost-saas?style=flat-square)](https://github.com/Anapey01/zero-cost-saas)
+[![CI](https://github.com/Anapey01/zero-cost-saas/actions/workflows/ci.yml/badge.svg?style=flat-square)](https://github.com/Anapey01/zero-cost-saas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](./LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](./CONTRIBUTING.md)
 
@@ -21,6 +22,53 @@ and the honest cost we paid.
 
 The reference implementations for some of these are in [`/patterns`](./patterns/).
 They're stripped of all business logic — the mechanism in isolation.
+
+---
+
+## Topology: The Sleep-by-Default Architecture
+
+```mermaid
+flowchart TD
+    subgraph Clients["📱 Clients (PWA / Mobile Shell)"]
+        User["User Browser / Android TWA"]
+        Compressor["Canvas Image Compressor\n(<1MB / 1920px before upload)"]
+        Cache["React Query + Safe localStorage Persister\n(Crash-proof in WebView sandboxes)"]
+    end
+
+    subgraph Edge["⚡ Edge CDN (Vercel Hobby)"]
+        Next["Next.js Web Frontend"]
+        CustomLoader["Custom imageLoader.ts\n(Bypasses Vercel transform quotas)"]
+        CronTrigger["Vercel Cron Trigger\n(Daily @ 2 AM + 14-min keep-alive)"]
+    end
+
+    subgraph Media["☁️ Media Hosting (Cloudinary Free)"]
+        Cloudinary["Cloudinary Fetch CDN\n(On-the-fly resizing & format auto-negotiation)"]
+    end
+
+    subgraph Compute["🌐 Serverless Compute (Render Free Tier)"]
+        Django["Django REST Framework (Gunicorn)\n⚡ SLEEPS AFTER 15 MIN INACTIVITY\n(750 free instance-hours/mo)"]
+        CronEndpoint["POST /api/cron/daily/\n(Runs 8 periodic tasks inside web process)"]
+    end
+
+    subgraph Database["🐘 Relational DB (Neon Serverless)"]
+        Neon["Postgres Instance\n⚡ AUTO-SUSPENDS COMPUTE WHEN IDLE\n(conn_max_age=0 drops connections immediately)"]
+    end
+
+    subgraph AI["🤖 AI Engine (Google AI Studio Free)"]
+        Cascade["Gemini Vision Waterfall\n(Tries v1/v1beta across 6 model versions on 429)"]
+    end
+
+    User -->|1. Compress| Compressor
+    User -->|2. Local Cache| Cache
+    User -->|3. HTTPS| Next
+    Next -->|Proxy Image Requests| CustomLoader
+    CustomLoader -->|Transform on-the-fly| Cloudinary
+    Next -->|API Traffic| Django
+    CronTrigger -->|Wakeup & Run Tasks| CronEndpoint
+    CronEndpoint -.->|Execute Tasks| Django
+    Django -->|Queries| Neon
+    Django -->|Fallback Waterfall| Cascade
+```
 
 ---
 

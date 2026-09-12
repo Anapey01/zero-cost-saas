@@ -5,7 +5,7 @@ is not as controlled as you think, especially in TWA/WebView wrappers.
 
 ---
 
-## safePersister.ts — Offline-tolerant query cache
+## safePersister.tsx — Offline-tolerant query cache
 
 **The failure mode:** Android TWA shells can revoke `localStorage` access at
 runtime. `localStorage.setItem()` throws `SecurityError`. If this propagates
@@ -28,7 +28,7 @@ npm install @tanstack/react-query @tanstack/react-query-persist-client
 ```
 
 Replace your existing `QueryClientProvider` wrapper with `QueryProvider`
-from `safePersister.ts`.
+from `safePersister.tsx`.
 
 ---
 

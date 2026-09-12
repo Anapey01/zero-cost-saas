@@ -8,7 +8,39 @@ Verifies:
   - Query-string token is rejected (even if correct value)
   - Missing CRON_SECRET config returns 401, not 500
 """
+import sys
+import os
+
+from django.conf import settings
+
+# ── Self-contained Django setup for standalone execution ─────────────────
+if not settings.configured:
+    settings.configure(
+        DEBUG=False,
+        SECRET_KEY='test-secret-key-for-test-runner',
+        ROOT_URLCONF=__name__,
+        CRON_SECRET='test-secret-value-for-tests',
+        ALLOWED_HOSTS=['testserver', 'localhost'],
+        INSTALLED_APPS=[
+            'django.contrib.contenttypes',
+            'django.contrib.auth',
+            'rest_framework',
+        ],
+        DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3'}},
+    )
+    import django
+    django.setup()
+
+from django.urls import path
 from django.test import TestCase, override_settings
+try:
+    from .django_view import TriggerDailyTasksView
+except ImportError:
+    from django_view import TriggerDailyTasksView
+
+urlpatterns = [
+    path('api/v1/orders/cron/daily/', TriggerDailyTasksView.as_view()),
+]
 
 
 @override_settings(CRON_SECRET='test-secret-value-for-tests')
@@ -61,3 +93,10 @@ class CronEndpointSecurityTest(TestCase):
         # Ensure no Django debug traceback leaks
         self.assertNotIn(b'Traceback', response.content)
         self.assertNotIn(b'Exception', response.content)
+
+
+if __name__ == '__main__':
+    from django.test.runner import DiscoverRunner
+    test_runner = DiscoverRunner(verbosity=2)
+    failures = test_runner.run_tests([__name__])
+    sys.exit(bool(failures))

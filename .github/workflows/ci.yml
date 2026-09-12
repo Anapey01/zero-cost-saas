@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  anonymization-audit:
+    name: Anonymization & Leak Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan for proprietary keywords and secret patterns
+        run: |
+          echo "Scanning codebase for proprietary brand names, real credentials, and internal hostnames..."
+          FORBIDDEN_TERMS=(
+            "londons"
+            "london_imports"
+            "londonsimports"
+            "api.london"
+            "dg67twduw"
+            "hubtel"
+            "termii"
+            "paystack"
+            "brevo"
+          )
+          FAILED=0
+          for term in "${FORBIDDEN_TERMS[@]}"; do
+            MATCHES=$(grep -rIn --exclude-dir=".git" --exclude-dir=".github" -i "$term" . || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::error::Forbidden proprietary term '$term' detected:"
+              echo "$MATCHES"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -ne 0 ]; then
+            echo "Audit failed: Proprietary identifiers or leaked domains found."
+            exit 1
+          fi
+          echo "Anonymization audit passed: 0 leaks found."
+
+  python-tests:
+    name: Python Syntax & Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install django djangorestframework requests Pillow dj-database-url
+
+      - name: Compile all Python files
+        run: |
+          python -m py_compile patterns/ai-cascade/ai_cascade.py
+          python -m py_compile patterns/cron-webhook/django_view.py
+          python -m py_compile patterns/cron-webhook/tests_security.py
+          python -m py_compile patterns/neon-sleep/settings_snippet.py
+
+      - name: Run Webhook Security Test Suite
+        run: |
+          python patterns/cron-webhook/tests_security.py
+
+  json-validation:
+    name: JSON Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate JSON syntax
+        run: |
+          python -m json.tool patterns/cron-webhook/vercel.json > /dev/null
+          echo "vercel.json syntax is valid."
