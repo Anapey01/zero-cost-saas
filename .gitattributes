@@ -1,0 +1,17 @@
+# Normalize line endings: LF in the repo, platform-native on checkout
+* text=auto
+
+# Force LF for code files regardless of OS
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+
+# Binary files — no conversion
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
