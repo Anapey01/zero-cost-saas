@@ -77,6 +77,7 @@ flowchart TD
 1. [Serverless Postgres: sleep economics](#1-serverless-postgres-sleep-economics)
 2. [Killing the always-on scheduler](#2-killing-the-always-on-scheduler)
 3. [Bypassing the frontend host's image transform quota](#3-bypassing-the-frontend-hosts-image-transform-quota)
+   - [Sidebar: The Vercel Hobby Quota Playbook](#sidebar-the-vercel-hobby-quota-playbook)
 4. [Cascading across free-tier AI endpoints](#4-cascading-across-free-tier-ai-endpoints)
 5. [Client-side compression before upload](#5-client-side-compression-before-upload)
 6. [Offline-tolerant caching that doesn't crash in sandboxed environments](#6-offline-tolerant-caching-that-doesnt-crash-in-sandboxed-environments)
@@ -309,6 +310,18 @@ Cloudinary is the origin, but the `next/image` component's
 a custom loader — format selection is entirely delegated to Cloudinary.
 
 The loader code is in [`/patterns/client-resilience/imageLoader.ts`](./patterns/client-resilience/imageLoader.ts).
+
+### Sidebar: The Vercel Hobby Quota Playbook
+
+Image optimization is the most notorious Vercel Hobby cliff, but running a real production frontend at $0 requires neutralizing four separate free-tier ceilings simultaneously:
+
+| Vercel Hobby Ceiling | The Hidden Trap | How This Architecture Bypasses It |
+|---|---|---|
+| **1,000 Image Optimizations / month** | Browsing a 200-item catalog across responsive viewports exhausts your monthly optimization budget in days. Subsequent images break layout or throw errors. | **Custom Loader (`imageLoader.ts`):** Routes all images directly through Cloudinary Fetch. Vercel's image servers are never invoked. |
+| **Max 2 Cron Jobs** | Scheduling maintenance routines individually (cart cleanups, reminders, payouts, cutoff checks) fails Vercel's deployment check. | **Unified Webhook Endpoint:** Bundled all 8 periodic maintenance tasks into a single synchronous Django endpoint (`POST /cron/daily/`), leaving the second slot open for a 14-min keep-alive ping. |
+| **100 GB Fast Data Transfer / month** | Serving high-resolution e-commerce images directly from Vercel edge nodes burns 100 GB quickly. | **Media Offloading:** Media represents >90% of total payload size. Offloading assets to Cloudinary keeps Vercel bandwidth strictly to HTML/JS bundles (<5–10 GB/mo). |
+| **10-Second Function Timeout** | Next.js API routes on Hobby are killed after 10 seconds, terminating background tasks or slow database queries. | **Decoupled Backend:** Heavy compute lives on Render, not Vercel Functions. Render executes long-running commands without Vercel's 10-second execution kill switch. |
+| **100,000 Serverless Invocations / month** | Proxying every frontend client request through Next.js `/api/...` routes drains function invocations rapidly. | **Direct Client $\rightarrow$ API:** The frontend connects directly to `api.example.com` (DRF on Render) with JWTs. Standard browsing consumes zero Vercel serverless function invocations. |
 
 ---
 
@@ -626,7 +639,7 @@ your build output.
 
 | Service | Free tier used | Notes |
 |---|---|---|
-| Vercel (frontend) | Hobby plan | 1 project, no image optimization quota used |
+| Vercel (frontend) | Hobby plan | 0 image quota used, 0 serverless invocations burned, <10 GB bandwidth |
 | Render (backend) | 750 hrs/month | Single `web` service; sleeps after 15 min idle |
 | Neon (database) | Free tier | 0.5 GB storage, compute auto-suspends |
 | Cloudinary (media) | Free tier | 25 GB storage + bandwidth, fetch URL enabled |
